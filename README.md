@@ -72,7 +72,7 @@ make clean
 ## 命令说明
 
 - `./clinvarDL config`: 配置 API key 及邮箱并生成配置文件
-- `./clinvarDL config set api_key ***11111aaa***`: 设置 API key
+- `./clinvarDL config set apiKey ***11111aaa***`: 设置 API key
 - `./clinvarDL config set email abc@abc.com`: 设置邮箱
 - `./clinvarDL config edit`: 编辑配置文件
 - `./clinvarDL filters edit`: 编辑过滤器配置文件
