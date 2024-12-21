@@ -1,0 +1,122 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"build",
+				"-ldflags=-s -w",
+				"-gcflags=-N -l",
+				"-o",
+				"${input:binDir}/${input:binName}-${input:goarch}-${input:goos}${input:binaryExt}",
+				"${input:mainPath}"
+			],
+			"options": {
+				"env": {
+					"CGO_ENABLED": "0",
+					"GOARCH": "${input:goarch}",
+					"GOOS": "${input:goos}"
+				}
+			},
+			"dependsOn": [],
+			"dependsOrder": "sequence"
+		},
+		{
+			"label": "run",
+			"type": "shell",
+			"command": "${input:binDir}/${input:binName}-${input:goarch}-${input:goos}${input:binaryExt}",
+			"args": [
+				"run",
+				"-f",
+				"test.txt"
+				// "task.txt"
+			],
+			"dependsOn": [
+				"build"
+			],
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "test",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"test",
+				"-v",
+				"${input:mainPath}"
+			],
+			"options": {
+				"env": {
+					"CGO_ENABLED": "0"
+				}
+			},
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			},
+			"presentation": {
+				"reveal": "always"
+			},
+			"problemMatcher": [
+				
+			]
+		}
+	],
+	"inputs": [
+		{
+			"id": "mainPath",
+			"type": "command",
+			"command": "extension.commandvariable.transform",
+			"args": {
+				"text": "cmd/main.go" // 这里需要据实际情况修改入口文件路径
+			}
+		},
+		{
+			"id": "binDir",
+			"type": "command",
+			"command": "extension.commandvariable.transform",
+			"args": {
+				"text": "${workspaceFolder}/bin" // 这里需要根据实际情况修改输出目录
+			}
+		},
+		{
+			"id": "binName",
+			"type": "command",
+			"command": "extension.commandvariable.transform",
+			"args": {
+				"text": "clinvarDL" // 这里需要根据实际情况修改二进制文件名
+			}
+		},
+		{
+			"id": "goarch",
+			"type": "command",
+			"command": "extension.commandvariable.transform",
+			"args": {
+				"text": "amd64"  // 这里需要根据实际情况修改架构 （amd64, arm64, 386）
+			}
+		},
+		{
+			"id": "goos",
+			"type": "command",
+			"command": "extension.commandvariable.transform",
+			"args": {
+				"text": "windows" // 这里需要根据实际情况修改操作系统 （windows, linux, darwin）
+			}
+		},
+		{
+			"id": "binaryExt",
+			"type": "command",
+			"command": "extension.commandvariable.transform",
+			"args": {
+				"text": ".exe" // 这里需要根据实际情况修改二进制文件扩展名 （.exe, ""）
+			}
+		}
+	]
+}
