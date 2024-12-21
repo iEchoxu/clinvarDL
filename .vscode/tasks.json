@@ -30,8 +30,8 @@
 			"args": [
 				"run",
 				"-f",
-				"test.txt"
-				// "task.txt"
+				//"test.txt"
+				"task.txt"
 			],
 			"dependsOn": [
 				"build"
