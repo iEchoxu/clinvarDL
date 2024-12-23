@@ -65,7 +65,7 @@ func (e *EsummaryExecutor) ProcessSummaryFlow(ctx context.Context, query *types.
 			return
 		}
 
-		collector.Result = result // 返回已收集的结果
+		collector.Result = result // 部分成功时返回已收集的结果
 		return
 	}
 
@@ -395,8 +395,11 @@ func (e *EsummaryExecutor) RetryBatches(ctx context.Context, query *types.Query,
 	result, err := e.collectResults(ctx, query, resultChan, collector)
 	if err != nil {
 		logcdl.Error("failed to collect some results: %v", err)
-		collector.Error = err
-		return
+
+		if result == nil {
+			collector.SetStatusOnError(err, e.Config.EntrezParams.Filters != "")
+			return
+		}
 	}
 
 	// 合并新的结果到现有结果中
