@@ -363,7 +363,10 @@ func (e *EsummaryExecutor) executeSummary(ctx context.Context, webEnv, queryKey 
 func (e *EsummaryExecutor) RetryBatches(ctx context.Context, query *types.Query, batches []types.BatchInfo, searchChan <-chan *types.ESearchResult, collector *types.QueryResult) {
 	searchResult, err := e.waitForSearchResult(ctx, query, searchChan)
 	if err != nil {
-		collector.Error = err
+		var emptyError *customerrors.EmptyResultError
+		if !errors.As(err, &emptyError) {
+			collector.SetStatusOnError(err, e.Config.EntrezParams.Filters != "")
+		}
 		return
 	}
 
@@ -396,6 +399,8 @@ func (e *EsummaryExecutor) RetryBatches(ctx context.Context, query *types.Query,
 	result, err := e.collectResults(ctx, query, resultChan, collector)
 	if err != nil {
 		logcdl.Error("failed to collect some results: %v", err)
+		collector.Error = err
+		return
 	}
 
 	// 合并新的结果到现有结果中
