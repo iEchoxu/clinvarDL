@@ -84,7 +84,3 @@ func (e *EsearchExecutor) executeSearch(ctx context.Context, query *types.Query,
 		collector.SetStatusOnError(err, e.Config.EntrezParams.Filters != "")
 	}
 }
-
-func (e *EsearchExecutor) RetryBatch(ctx context.Context, query *types.Query) (*types.ESearchResult, error) {
-	return e.Esearch.Execute(ctx, query)
-}
