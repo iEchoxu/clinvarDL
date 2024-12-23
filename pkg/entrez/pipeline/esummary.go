@@ -60,24 +60,20 @@ func (e *EsummaryExecutor) ProcessSummaryFlow(ctx context.Context, query *types.
 	// 根据结果数量选择处理方式
 	result, err := e.processSearchResult(ctx, query, searchResult, collector)
 	if err != nil {
+		if result == nil {
+			collector.SetStatusOnError(err, e.Config.EntrezParams.Filters != "")
+			return
+		}
+
 		collector.Result = result // 返回已收集的结果
 		return
 	}
 
-	// 发送结果
-	select {
-	case <-ctx.Done():
-		collector.Error = ctx.Err()
-		collector.ProcessedCount = 0
-		collector.Progress = collector.GetProgressString()
-		collector.Result = nil
-	default:
-		// 统计搜索结果
-		collector.Result = result
-		collector.Error = nil
-		collector.Status = collector.GetQueryStatus()
-		collector.Progress = collector.GetProgressString()
-	}
+	// 更新状态
+	collector.Result = result
+	collector.Error = nil
+	// collector.Status = collector.GetQueryStatus()
+	// collector.Progress = collector.GetProgressString()
 }
 
 // waitForSearchResult 等待搜索结果
