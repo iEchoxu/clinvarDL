@@ -43,7 +43,7 @@ func (e *EsummaryExecutor) setupOperations() {
 		SetUseStream(e.Config.Stream.GetEnabled())
 }
 
-// processSummaryFlow 执行 ESummary 流程
+// ProcessSummaryFlow 执行 ESummary 流程
 func (e *EsummaryExecutor) ProcessSummaryFlow(ctx context.Context, query *types.Query, searchChan chan *types.ESearchResult, collector *types.QueryResult) {
 	// 等待并验证 ESearch 结果
 	searchResult, err := e.waitForSearchResult(ctx, query, searchChan)
