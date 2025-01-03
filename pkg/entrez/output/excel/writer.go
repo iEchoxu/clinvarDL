@@ -14,12 +14,11 @@ import (
 
 type Writer struct {
 	file         *excelize.File
-	sheetName    string
 	currentRow   int
 	streamWriter *excelize.StreamWriter
 	rowBuffer    [][]interface{}
-	bufferSize   int
 	mu           sync.Mutex
+	styles       ExcelStyle
 }
 
 func NewWriter(sheetName string) (output.Writer, error) {
@@ -36,64 +35,69 @@ func NewWriter(sheetName string) (output.Writer, error) {
 		return nil, fmt.Errorf("failed to create stream writer: %w", err)
 	}
 
-	return &Writer{
+	// 获取当前激活的样式
+	styles, err := NewStyle(activeStyle)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create style: %w", err)
+	}
+
+	// 初始化样式
+	if err := styles.InitStyle(f); err != nil {
+		return nil, fmt.Errorf("failed to init style: %w", err)
+	}
+
+	w := &Writer{
 		file:         f,
-		sheetName:    sheetName,
 		currentRow:   1,
 		streamWriter: sw,
-		rowBuffer:    make([][]interface{}, 0, 1000),
-		bufferSize:   1000,
-	}, nil
+		rowBuffer:    make([][]interface{}, 0, defaultBufferSize),
+		styles:       styles,
+	}
+
+	return w, nil
 }
 
 func (ew *Writer) SetHeaders(headers []string) error {
-	headers = []string{
-		"Name",
-		"Gene(s)",
-		"GeneID",
-		"Protein change",
-		"Condition(s)",
-		"Accession",
-		"Accession Version",
-		"GRCh37Chromosome",
-		"GRCh37Location",
-		"GRCh37AssemblyAccVer",
-		"GRCh38Chromosome",
-		"GRCh38Location",
-		"GRCh38AssemblyAccVer",
-		"VariationID",
-		"AlleleID(s)",
-		"dbSNP ID",
-		"Cdna Change",
-		"Canonical SPDI",
-		"Variant type",
-		"Molecular consequence",
-		"Germline classification",
-		"Germline date last evaluated",
-		"Germline review status",
-		"Somatic clinical impact",
-		"Somatic clinical impact date last evaluated",
-		"Somatic clinical impact review status",
-		"Oncogenicity classification",
-		"Oncogenicity date last evaluated",
-		"Oncogenicity review status",
-		"Query", // 添加查询列, 用于数据校对 （可删除）
+	// 使用默认表头
+	if headers == nil {
+		headers = defaultHeaders[:]
 	}
 
-	ew.mu.Lock()
-	defer ew.mu.Unlock()
+	// 使用预定义的列宽
+	for i, width := range defaultColumnWidths {
+		if err := ew.streamWriter.SetColWidth(i+1, i+1, width); err != nil {
+			return fmt.Errorf("failed to set column width: %w", err)
+		}
+	}
 
+	// 冻结首行
+	if err := ew.streamWriter.SetPanes(&excelize.Panes{
+		Freeze:      true,
+		Split:       false,
+		XSplit:      0,
+		YSplit:      1,
+		TopLeftCell: "A2",
+		ActivePane:  "bottomLeft",
+	}); err != nil {
+		return fmt.Errorf("failed to set panes: %w", err)
+	}
+
+	// 写入表头
 	cell, _ := excelize.CoordinatesToCellName(1, ew.currentRow)
-
 	interfaceHeaders := make([]interface{}, len(headers))
 	for i, v := range headers {
 		interfaceHeaders[i] = v
 	}
 
-	if err := ew.streamWriter.SetRow(cell, interfaceHeaders); err != nil {
-		return fmt.Errorf("failed to set headers: %w", err)
+	if err := ew.streamWriter.SetRow(cell, interfaceHeaders, excelize.RowOpts{
+		Height:  defaultRowHeight,
+		StyleID: ew.styles.GetRowStyle(ew.currentRow), // 设置表头样式
+	}); err != nil {
+		return fmt.Errorf("failed to write headers: %w", err)
 	}
+
 	ew.currentRow++
+
 	return nil
 }
 
@@ -110,30 +114,41 @@ func (ew *Writer) WriteResultStream(ctx context.Context, results <-chan *types.Q
 				return fmt.Errorf("failed to process result: %w", err)
 			}
 
-			ew.mu.Lock()
-			ew.rowBuffer = append(ew.rowBuffer, rows...)
-			if len(ew.rowBuffer) >= ew.bufferSize {
-				if err := ew.flushBuffer(); err != nil {
-					ew.mu.Unlock()
-					return err
+			// 写入缓冲区
+			if len(rows) > 0 {
+				ew.mu.Lock()
+				ew.rowBuffer = append(ew.rowBuffer, rows...)
+				needFlush := len(ew.rowBuffer) >= defaultBufferSize
+				if needFlush {
+					if err := ew.flushBuffer(); err != nil {
+						ew.mu.Unlock()
+						return err
+					}
 				}
+				ew.mu.Unlock()
 			}
-			ew.mu.Unlock()
 
 		case <-ctx.Done():
+			// 确保在上下文取消时也能刷新缓冲区
+			if len(ew.rowBuffer) > 0 {
+				if err := ew.flushBuffer(); err != nil {
+					return fmt.Errorf("failed to flush buffer on context done: %w", err)
+				}
+			}
 			return ctx.Err()
 		}
 	}
 }
 
 func (ew *Writer) processResult(result *types.QueryResult) ([][]interface{}, error) {
-	if result == nil {
+	if result == nil || result.Result == nil ||
+		len(result.Result.DocumentSummarySet.DocumentSummary) == 0 {
 		return nil, nil
 	}
 
 	docSum := result.Result
-
 	var rows [][]interface{}
+
 	for _, doc := range docSum.DocumentSummarySet.DocumentSummary {
 		// 构建 dbSNP ID
 		var dbSNPIds []string
@@ -208,7 +223,7 @@ func (ew *Writer) processResult(result *types.QueryResult) ([][]interface{}, err
 		row[26] = doc.OncogenicityClassification.Description
 		row[27] = doc.OncogenicityClassification.LastEvaluated
 		row[28] = doc.OncogenicityClassification.ReviewStatus
-		row[29] = result.Query // 可删除
+		// row[29] = result.Query // 可删除
 
 		rows = append(rows, row)
 	}
@@ -220,16 +235,11 @@ func (ew *Writer) Save(filename string) error {
 	ew.mu.Lock()
 	defer ew.mu.Unlock()
 
-	// 保存前确保缓冲区被刷新
-	if len(ew.rowBuffer) > 0 {
-		if err := ew.flushBuffer(); err != nil {
-			return err
-		}
-	}
-
+	// 刷新并关闭 StreamWriter
 	if err := ew.streamWriter.Flush(); err != nil {
 		return fmt.Errorf("failed to flush stream writer: %w", err)
 	}
+
 	return ew.file.SaveAs(filename)
 }
 
@@ -240,11 +250,27 @@ func (ew *Writer) Close() error {
 func (ew *Writer) flushBuffer() error {
 	for _, row := range ew.rowBuffer {
 		cell, _ := excelize.CoordinatesToCellName(1, ew.currentRow)
-		if err := ew.streamWriter.SetRow(cell, row); err != nil {
+
+		if err := ew.streamWriter.SetRow(cell, row, excelize.RowOpts{
+			Height:  defaultRowHeight,
+			StyleID: ew.styles.GetRowStyle(ew.currentRow), // 使用自定义样式
+		}); err != nil {
 			return fmt.Errorf("failed to write row: %w", err)
 		}
 		ew.currentRow++
 	}
-	ew.rowBuffer = ew.rowBuffer[:0] // 清空缓冲区但保留容量
+
+	// 添加表格
+	lastCol, _ := excelize.ColumnNumberToName(len(defaultHeaders))
+	if err := ew.streamWriter.AddTable(&excelize.Table{
+		Range: fmt.Sprintf("A1:%s%d", lastCol, ew.currentRow),
+		Name:  "Table1",
+		// StyleName: "TableStyleMedium13", // 使用内置样式
+	}); err != nil {
+		return fmt.Errorf("failed to add table: %w", err)
+	}
+
+	// 清空缓冲区
+	ew.rowBuffer = ew.rowBuffer[:0]
 	return nil
 }
