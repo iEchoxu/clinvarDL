@@ -13,7 +13,7 @@ var defaultColumnWidths = [defaultColCount]float64{
 	20, // B: Genes
 	20, // C: GeneIDs
 	28, // D: Protein change
-	60, // E: Conditions
+	62, // E: Conditions
 	20, // F: Accession
 	20, // G: Accession Version
 	20, // H: GRCh37Chromosome
