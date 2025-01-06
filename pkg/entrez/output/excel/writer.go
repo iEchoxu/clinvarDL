@@ -193,7 +193,7 @@ func (ew *Writer) processResult(result *types.QueryResult) ([][]interface{}, err
 			geneIDs = append(geneIDs, gene.GeneID)
 		}
 
-		row := make([]interface{}, 30)
+		row := make([]interface{}, defaultColCount)
 		row[0] = doc.Title // Name 字段改为 Title
 		row[1] = strings.Join(genes, "|")
 		row[2] = strings.Join(geneIDs, "|")
