@@ -8,12 +8,11 @@ import (
 
 // NormalizePath 转换路径中的分隔符，并处理家目录和当前目录的符号
 func NormalizePath(path string) (string, error) {
-	fmt.Printf("path is %s\n", path)
 	// 处理 ~ 开头的路径
 	if len(path) == 1 && path[0] == '~' {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return "", err
+			return path, err
 		}
 		return homeDir, nil
 	}
@@ -22,7 +21,7 @@ func NormalizePath(path string) (string, error) {
 		// 处理 . 开头的路径
 		cwd, err := os.Getwd()
 		if err != nil {
-			return "", err
+			return path, err
 		}
 		return cwd, nil
 	}
@@ -31,7 +30,7 @@ func NormalizePath(path string) (string, error) {
 	if len(path) > 1 && strings.HasPrefix(path, "~") {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return "", err
+			return path, err
 		}
 		join := filepath.Join(homeDir, path[2:])
 		return filepath.Clean(join), nil
@@ -41,7 +40,7 @@ func NormalizePath(path string) (string, error) {
 	if len(path) > 1 && strings.HasPrefix(path, "./") {
 		cwd, err := os.Getwd()
 		if err != nil {
-			return "", err
+			return path, err
 		}
 		join := filepath.Join(cwd, path[2:])
 		return filepath.Clean(join), nil
